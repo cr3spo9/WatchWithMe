@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useSocket } from '../hooks/useSocket';
 
+const STORAGE_KEY = 'watchparty-room';
+
+interface StoredRoomData {
+  roomCode: string;
+  username: string;
+}
+
 interface Participant {
   id: string;
   username: string;
@@ -33,8 +40,31 @@ interface RoomContextValue extends RoomState {
 
 const RoomContext = createContext<RoomContextValue | null>(null);
 
+function saveRoomToStorage(roomCode: string, username: string) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ roomCode, username }));
+}
+
+function getRoomFromStorage(): StoredRoomData | null {
+  const data = localStorage.getItem(STORAGE_KEY);
+  if (data) {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function clearRoomStorage() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function RoomProvider({ children }: { children: React.ReactNode }) {
   const { emit, on } = useSocket();
+  const hasAttemptedRejoin = useRef(false);
+  const pendingUsername = useRef<string | null>(null);
+  const pendingRoomCode = useRef<string | null>(null);
   const [state, setState] = useState<RoomState>({
     roomCode: null,
     videoId: null,
@@ -55,6 +85,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     unsubscribers.push(
       on('room-created', (data: unknown) => {
         const { roomCode, videoId } = data as { roomCode: string; videoId: string };
+        if (pendingUsername.current) {
+          saveRoomToStorage(roomCode, pendingUsername.current);
+          pendingUsername.current = null;
+        }
         setState(prev => ({
           ...prev,
           roomCode,
@@ -75,6 +109,11 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
           currentTime: number;
           isPlaying: boolean;
         };
+        if (pendingRoomCode.current && pendingUsername.current) {
+          saveRoomToStorage(pendingRoomCode.current, pendingUsername.current);
+          pendingUsername.current = null;
+          pendingRoomCode.current = null;
+        }
         setState(prev => ({
           ...prev,
           videoId,
@@ -113,6 +152,9 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     unsubscribers.push(
       on('error', (data: unknown) => {
         const { message } = data as { message: string };
+        clearRoomStorage();
+        pendingUsername.current = null;
+        pendingRoomCode.current = null;
         setState(prev => ({ ...prev, error: message }));
       })
     );
@@ -122,16 +164,51 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     };
   }, [on]);
 
+  // Auto-rejoin room on page refresh
+  useEffect(() => {
+    if (hasAttemptedRejoin.current) return;
+
+    const storedRoom = getRoomFromStorage();
+    if (!storedRoom) return;
+
+    const attemptRejoin = () => {
+      if (hasAttemptedRejoin.current) return;
+      hasAttemptedRejoin.current = true;
+
+      const { roomCode, username } = storedRoom;
+      console.log(`Reconnecting to room ${roomCode} as ${username}...`);
+      pendingUsername.current = username;
+      pendingRoomCode.current = roomCode;
+      setState(prev => ({ ...prev, roomCode }));
+      emit('join-room', { roomCode, username });
+    };
+
+    // Listen for socket connect event to rejoin
+    const unsubConnect = on('connect', attemptRejoin);
+
+    // Also try after a short delay in case socket is already connected
+    const timeoutId = setTimeout(attemptRejoin, 100);
+
+    return () => {
+      unsubConnect();
+      clearTimeout(timeoutId);
+    };
+  }, [on, emit]);
+
   const createRoom = useCallback((videoUrl: string, username: string) => {
+    pendingUsername.current = username;
     emit('create-room', { videoUrl, username });
   }, [emit]);
 
   const joinRoom = useCallback((roomCode: string, username: string) => {
+    pendingUsername.current = username;
+    pendingRoomCode.current = roomCode;
     setState(prev => ({ ...prev, roomCode }));
     emit('join-room', { roomCode, username });
   }, [emit]);
 
   const leaveRoom = useCallback(() => {
+    clearRoomStorage();
     emit('leave-room');
     setState({
       roomCode: null,
