@@ -12,7 +12,8 @@ const io = new Server(httpServer, {
     origin: [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'https://watchwithme-client.onrender.com'
+      'https://watchwithme.app',
+      'https://www.watchwithme.app'
     ],
     methods: ['GET', 'POST']
   }

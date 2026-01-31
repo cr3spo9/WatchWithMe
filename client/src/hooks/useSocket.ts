@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.PROD
-  ? 'https://watchwithme-f8f3.onrender.com'
+  ? 'https://api.watchwithme.app'
   : 'http://localhost:3001';
 
 export function useSocket() {
