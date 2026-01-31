@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Copy, Check, LogOut, Share2, Clock } from 'lucide-react';
 
 const SYNC_INTERVAL = 500; // Sync check every 500ms
-const SYNC_THRESHOLD = 0.3; // Start adjusting speed if difference > 0.3 seconds
+const SYNC_THRESHOLD = 0.2; // Start adjusting speed if difference > 0.2 seconds
 const SEEK_THRESHOLD = 5; // Only seekTo if difference > 5 seconds
 const TIME_UPDATE_INTERVAL = 100; // Update time display every 100ms
 const SPEED_FACTOR = 0.15; // How aggressively to adjust speed (0.1 = gentle, 0.3 = aggressive)
