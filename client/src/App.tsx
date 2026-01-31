@@ -6,9 +6,25 @@ import { VideoPlayer } from './components/VideoPlayer';
 
 function AppContent() {
   const { isConnected, videoId } = useRoom();
+  const isInRoom = isConnected && videoId;
 
-  if (!isConnected || !videoId) {
-    return <RoomControls />;
+  if (!isInRoom) {
+    return (
+      <>
+        {/* User button solo cuando NO estamos en una sala */}
+        <div className="fixed top-4 right-4 z-50">
+          <UserButton
+            appearance={{
+              baseTheme: dark,
+              elements: {
+                avatarBox: "w-10 h-10"
+              }
+            }}
+          />
+        </div>
+        <RoomControls />
+      </>
+    );
   }
 
   return <VideoPlayer />;
@@ -16,22 +32,9 @@ function AppContent() {
 
 function AuthenticatedApp() {
   return (
-    <>
-      {/* User button en la esquina superior derecha */}
-      <div className="fixed top-4 right-4 z-50">
-        <UserButton
-          appearance={{
-            baseTheme: dark,
-            elements: {
-              avatarBox: "w-10 h-10"
-            }
-          }}
-        />
-      </div>
-      <RoomProvider>
-        <AppContent />
-      </RoomProvider>
-    </>
+    <RoomProvider>
+      <AppContent />
+    </RoomProvider>
   );
 }
 

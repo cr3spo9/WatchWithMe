@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { UserButton } from '@clerk/clerk-react';
+import { dark } from '@clerk/themes';
 import { useRoom } from '../context/RoomContext';
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer';
 import { ParticipantsList } from './ParticipantsList';
@@ -191,14 +193,24 @@ export function VideoPlayer() {
             </div>
           </div>
 
-          <Button
-            onClick={leaveRoom}
-            variant="destructive"
-            size="sm"
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Salir
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={leaveRoom}
+              variant="destructive"
+              size="sm"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Salir
+            </Button>
+            <UserButton
+              appearance={{
+                baseTheme: dark,
+                elements: {
+                  avatarBox: "w-9 h-9"
+                }
+              }}
+            />
+          </div>
         </div>
 
         {/* Main content */}
