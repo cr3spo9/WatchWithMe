@@ -1,5 +1,7 @@
-import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
+import { useEffect } from 'react';
+import { SignedIn, SignedOut, SignIn, UserButton, useUser } from '@clerk/clerk-react';
 import { dark } from '@clerk/themes';
+import { usePostHog } from '@posthog/react';
 import { RoomProvider, useRoom } from './context/RoomContext';
 import { RoomControls } from './components/RoomControls';
 import { VideoPlayer } from './components/VideoPlayer';
@@ -31,6 +33,19 @@ function AppContent() {
 }
 
 function AuthenticatedApp() {
+  const { user } = useUser();
+  const posthog = usePostHog();
+
+  useEffect(() => {
+    if (user) {
+      posthog.identify(user.id, {
+        email: user.primaryEmailAddress?.emailAddress,
+        username: user.username || user.firstName,
+        name: user.fullName
+      });
+    }
+  }, [user, posthog]);
+
   return (
     <RoomProvider>
       <AppContent />

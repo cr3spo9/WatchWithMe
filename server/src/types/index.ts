@@ -1,5 +1,8 @@
+export type VideoPlatform = 'youtube' | 'twitch';
+
 export interface Room {
   code: string;
+  platform: VideoPlatform;
   videoId: string;
   hostId: string;
   participants: Map<string, Participant>;

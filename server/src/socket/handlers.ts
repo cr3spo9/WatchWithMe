@@ -35,7 +35,8 @@ export function setupSocketHandlers(io: Server) {
 
       socket.emit('room-created', {
         roomCode: room.code,
-        videoId: room.videoId
+        videoId: room.videoId,
+        platform: room.platform
       });
 
       console.log(`Room created: ${room.code} by ${username}`);
@@ -56,6 +57,7 @@ export function setupSocketHandlers(io: Server) {
       // Notify the joiner
       socket.emit('room-joined', {
         videoId: room.videoId,
+        platform: room.platform,
         participants: getParticipantsList(room),
         isHost: false,
         currentTime: room.currentTime,

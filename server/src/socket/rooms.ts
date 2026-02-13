@@ -1,4 +1,4 @@
-import { Room, Participant } from '../types/index.js';
+import { Room, Participant, VideoPlatform } from '../types/index.js';
 
 const rooms = new Map<string, Room>();
 
@@ -11,22 +11,44 @@ function generateRoomCode(): string {
   return code;
 }
 
-function extractVideoId(url: string): string | null {
-  const patterns = [
+type ParsedVideo = { platform: VideoPlatform; videoId: string } | null;
+
+function parseVideoUrl(url: string): ParsedVideo {
+  const youtubePatterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/,
     /^([a-zA-Z0-9_-]{11})$/
   ];
 
-  for (const pattern of patterns) {
+  for (const pattern of youtubePatterns) {
     const match = url.match(pattern);
-    if (match) return match[1];
+    if (match) return { platform: 'youtube', videoId: match[1] };
   }
+
+  const trimmed = url.trim();
+
+  // Twitch VOD URLs look like https://www.twitch.tv/videos/<id>
+  const twitchVodMatch = trimmed.match(/twitch\.tv\/videos\/(\d+)/i);
+  if (twitchVodMatch) {
+    return { platform: 'twitch', videoId: `video:${twitchVodMatch[1]}` };
+  }
+
+  // Twitch live URLs look like https://www.twitch.tv/<channel>
+  const twitchChannelMatch = trimmed.match(/twitch\.tv\/([a-zA-Z0-9_]+)/i);
+  if (twitchChannelMatch) {
+    return { platform: 'twitch', videoId: `channel:${twitchChannelMatch[1].toLowerCase()}` };
+  }
+
+  // Allow passing just the channel name
+  if (/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    return { platform: 'twitch', videoId: `channel:${trimmed.toLowerCase()}` };
+  }
+
   return null;
 }
 
 export function createRoom(videoUrl: string, hostId: string, username: string): Room | null {
-  const videoId = extractVideoId(videoUrl);
-  if (!videoId) return null;
+  const parsed = parseVideoUrl(videoUrl.trim());
+  if (!parsed) return null;
 
   let code = generateRoomCode();
   while (rooms.has(code)) {
@@ -41,7 +63,8 @@ export function createRoom(videoUrl: string, hostId: string, username: string): 
 
   const room: Room = {
     code,
-    videoId,
+    platform: parsed.platform,
+    videoId: parsed.videoId,
     hostId,
     participants: new Map([[hostId, host]]),
     currentTime: 0,

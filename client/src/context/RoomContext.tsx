@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { usePostHog } from '@posthog/react';
 import { useSocket } from '../hooks/useSocket';
-import type { VideoPlatform } from '@/types/video';
 
 const STORAGE_KEY = 'watchparty-room';
 
@@ -19,7 +18,6 @@ interface Participant {
 interface RoomState {
   roomCode: string | null;
   videoId: string | null;
-  platform: VideoPlatform | null;
   isHost: boolean;
   participants: Participant[];
   isConnected: boolean;
@@ -64,15 +62,14 @@ function clearRoomStorage() {
 }
 
 export function RoomProvider({ children }: { children: React.ReactNode }) {
-  const posthog = usePostHog();
   const { emit, on } = useSocket();
+  const posthog = usePostHog();
   const hasAttemptedRejoin = useRef(false);
   const pendingUsername = useRef<string | null>(null);
   const pendingRoomCode = useRef<string | null>(null);
   const [state, setState] = useState<RoomState>({
     roomCode: null,
     videoId: null,
-    platform: null,
     isHost: false,
     participants: [],
     isConnected: false,
@@ -89,17 +86,15 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
     unsubscribers.push(
       on('room-created', (data: unknown) => {
-        const { roomCode, videoId, platform } = data as { roomCode: string; videoId: string; platform: VideoPlatform };
+        const { roomCode, videoId } = data as { roomCode: string; videoId: string };
         if (pendingUsername.current) {
           saveRoomToStorage(roomCode, pendingUsername.current);
           pendingUsername.current = null;
         }
-        posthog.capture('room_created_success', { room_code: roomCode, platform, video_id: videoId });
         setState(prev => ({
           ...prev,
           roomCode,
           videoId,
-          platform,
           isHost: true,
           isConnected: true,
           participants: [{ id: 'self', username: 'Tú', isHost: true }]
@@ -109,9 +104,8 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
     unsubscribers.push(
       on('room-joined', (data: unknown) => {
-        const { videoId, platform, participants, isHost, currentTime, isPlaying } = data as {
+        const { videoId, participants, isHost, currentTime, isPlaying } = data as {
           videoId: string;
-          platform: VideoPlatform;
           participants: Participant[];
           isHost: boolean;
           currentTime: number;
@@ -119,19 +113,12 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
         };
         if (pendingRoomCode.current && pendingUsername.current) {
           saveRoomToStorage(pendingRoomCode.current, pendingUsername.current);
-          posthog.capture('room_joined_success', {
-            room_code: pendingRoomCode.current,
-            platform,
-            participants_count: participants.length,
-            is_host: isHost
-          });
           pendingUsername.current = null;
           pendingRoomCode.current = null;
         }
         setState(prev => ({
           ...prev,
           videoId,
-          platform,
           participants,
           isHost,
           isConnected: true,
@@ -159,8 +146,8 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
 
     unsubscribers.push(
       on('became-host', () => {
-        posthog.capture('user_became_host');
         setState(prev => ({ ...prev, isHost: true }));
+        posthog.capture('user_became_host');
         console.log('Ahora eres el host');
       })
     );
@@ -168,10 +155,10 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     unsubscribers.push(
       on('error', (data: unknown) => {
         const { message } = data as { message: string };
-        posthog.capture('room_error', { error_message: message });
         clearRoomStorage();
         pendingUsername.current = null;
         pendingRoomCode.current = null;
+        posthog.capture('room_error', { message });
         setState(prev => ({ ...prev, error: message }));
       })
     );
@@ -230,7 +217,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     setState({
       roomCode: null,
       videoId: null,
-      platform: null,
       isHost: false,
       participants: [],
       isConnected: false,

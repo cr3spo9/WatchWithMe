@@ -20,7 +20,7 @@ export function RoomControls() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (videoUrl) {
-      posthog.capture('room_create_submitted', { video_url: videoUrl });
+      posthog.capture('room_created', { username });
       createRoom(videoUrl, username);
     }
   };
@@ -28,7 +28,7 @@ export function RoomControls() {
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCode) {
-      posthog.capture('room_join_submitted', { room_code: roomCode });
+      posthog.capture('room_joined', { roomCode, username });
       joinRoom(roomCode, username);
     }
   };
@@ -47,10 +47,7 @@ export function RoomControls() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
-              onClick={() => {
-                posthog.capture('room_create_clicked');
-                setMode('create');
-              }}
+              onClick={() => setMode('create')}
               className="w-full h-14 text-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
               size="lg"
             >
@@ -59,10 +56,7 @@ export function RoomControls() {
             </Button>
 
             <Button
-              onClick={() => {
-                posthog.capture('room_join_clicked');
-                setMode('join');
-              }}
+              onClick={() => setMode('join')}
               variant="secondary"
               className="w-full h-14 text-lg"
               size="lg"
@@ -101,13 +95,13 @@ export function RoomControls() {
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm text-muted-foreground">
-                  URL del directo (YouTube o Twitch)
+                  URL del directo de YouTube
                 </label>
                 <Input
                   type="text"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="https://youtube.com/watch?v=... o https://twitch.tv/tu_canal"
+                  placeholder="https://youtube.com/watch?v=..."
                   required
                 />
               </div>
