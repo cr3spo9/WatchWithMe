@@ -15,6 +15,7 @@ if (!PUBLISHABLE_KEY) {
 
 const posthogOptions = {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+  person_profiles: 'identified_only' as const,
 }
 
 createRoot(document.getElementById('root')!).render(

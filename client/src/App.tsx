@@ -33,18 +33,18 @@ function AppContent() {
 }
 
 function AuthenticatedApp() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const posthog = usePostHog();
 
   useEffect(() => {
-    if (user) {
+    if (isLoaded && user) {
       posthog.identify(user.id, {
         email: user.primaryEmailAddress?.emailAddress,
         username: user.username || user.firstName,
         name: user.fullName
       });
     }
-  }, [user, posthog]);
+  }, [user, isLoaded, posthog]);
 
   return (
     <RoomProvider>
