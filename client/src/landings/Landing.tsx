@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { usePostHog } from '@posthog/react';
 import { Play, Users, Zap, RefreshCw, UserCheck, Share2, Youtube, X, ZoomIn } from 'lucide-react';
 
 // Landing
 export function Landing() {
+  const posthog = usePostHog();
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Close on escape key
@@ -74,7 +76,11 @@ export function Landing() {
               WATCHWITHME
             </span>
           </div>
-          <Link to="/app" className="px-6 py-3 border border-cyan-400 text-cyan-400 font-mono text-sm hover:bg-cyan-400 hover:text-black transition-all shadow-lg shadow-cyan-400/20">
+          <Link
+            to="/app"
+            onClick={() => posthog.capture('landing_cta_enter')}
+            className="px-6 py-3 border border-cyan-400 text-cyan-400 font-mono text-sm hover:bg-cyan-400 hover:text-black transition-all shadow-lg shadow-cyan-400/20"
+          >
             [ ENTRAR ]
           </Link>
         </div>
@@ -102,11 +108,19 @@ export function Landing() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/app" className="group px-8 py-5 bg-cyan-400 text-black font-mono font-bold text-lg hover:shadow-2xl hover:shadow-cyan-400/50 transition-all flex items-center justify-center gap-3">
+            <Link
+              to="/app"
+              onClick={() => posthog.capture('landing_cta_create_room')}
+              className="group px-8 py-5 bg-cyan-400 text-black font-mono font-bold text-lg hover:shadow-2xl hover:shadow-cyan-400/50 transition-all flex items-center justify-center gap-3"
+            >
               <Play className="w-5 h-5" />
               CREAR_SALA
             </Link>
-            <Link to="/app" className="px-8 py-5 border border-pink-400/50 text-pink-400 font-mono hover:bg-pink-400/10 transition-all text-center">
+            <Link
+              to="/app"
+              onClick={() => posthog.capture('landing_cta_join_room')}
+              className="px-8 py-5 border border-pink-400/50 text-pink-400 font-mono hover:bg-pink-400/10 transition-all text-center"
+            >
               UNIRSE
             </Link>
           </div>
@@ -228,7 +242,11 @@ export function Landing() {
               <div className="text-white mb-6">
                 &gt; Gratis. Sin registro._
               </div>
-              <Link to="/app" className="w-full py-4 bg-cyan-400 text-black font-bold hover:shadow-2xl hover:shadow-cyan-400/50 transition-all block text-center">
+              <Link
+                to="/app"
+                onClick={() => posthog.capture('landing_terminal_cta')}
+                className="w-full py-4 bg-cyan-400 text-black font-bold hover:shadow-2xl hover:shadow-cyan-400/50 transition-all block text-center"
+              >
                 $ CREAR_SALA
               </Link>
             </div>

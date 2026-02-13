@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { UserButton } from '@clerk/clerk-react';
 import { dark } from '@clerk/themes';
+import { usePostHog } from '@posthog/react';
 import { useRoom } from '../context/RoomContext';
-import { useYouTubePlayer } from '../hooks/useYouTubePlayer';
+import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { ParticipantsList } from './ParticipantsList';
 import { SyncStatus } from './SyncStatus';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { Copy, Check, LogOut, Share2, Clock } from 'lucide-react';
 const SYNC_INTERVAL = 500; // Sync check every 500ms
 const SYNC_THRESHOLD = 0.3; // Start adjusting speed if difference > 0.3 seconds
 const SEEK_THRESHOLD = 5; // Only seekTo if difference > 5 seconds
+const TWITCH_SEEK_THRESHOLD = 1.5; // Twitch doesn't support playback rate changes, so seek sooner
 const TIME_UPDATE_INTERVAL = 100; // Update time display every 100ms
 const SPEED_FACTOR = 0.15; // How aggressively to adjust speed (0.1 = gentle, 0.3 = aggressive)
 const MIN_SPEED = 0.75;
@@ -31,8 +33,10 @@ function formatTime(seconds: number): string {
 }
 
 export function VideoPlayer() {
+  const posthog = usePostHog();
   const {
     videoId,
+    platform,
     roomCode,
     isHost,
     leaveRoom,
@@ -55,34 +59,55 @@ export function VideoPlayer() {
   const syncIntervalRef = useRef<number | null>(null);
   const timeDisplayRef = useRef<number | null>(null);
   const isInitializedRef = useRef(false);
+  const isTwitchLive = platform === 'twitch' && videoId?.startsWith('channel:');
 
-  const handleStateChange = useCallback((state: number) => {
-    if (!isHost) return;
-    if (state === 1) emitPlay();
-    else if (state === 2) emitPause();
-  }, [isHost, emitPlay, emitPause]);
+  useEffect(() => {
+    isInitializedRef.current = false;
+  }, [videoId, platform]);
 
-  const handleReady = useCallback(() => {
-    if (!isHost && !isInitializedRef.current) {
-      isInitializedRef.current = true;
-      if (initialTime > 0) seekTo(initialTime);
-      if (initialPlaying) play();
+  const handleHostPlay = useCallback(() => {
+    if (isHost) {
+      emitPlay();
     }
-  }, [isHost, initialTime, initialPlaying]);
+  }, [isHost, emitPlay]);
+
+  const handleHostPause = useCallback(() => {
+    if (isHost) {
+      emitPause();
+    }
+  }, [isHost, emitPause]);
 
   const {
     containerRef,
     isReady,
+    supportsVariableSpeed,
+    supportsSeek,
+    usesManualClock,
     play,
     pause,
     seekTo,
     getCurrentTime,
     setPlaybackRate
-  } = useYouTubePlayer({
+  } = useVideoPlayer({
+    platform,
     videoId,
-    onStateChange: handleStateChange,
-    onReady: handleReady
+    onPlay: handleHostPlay,
+    onPause: handleHostPause
   });
+
+  useEffect(() => {
+    if (isHost || !isReady || isInitializedRef.current) return;
+
+    isInitializedRef.current = true;
+
+    if (initialTime > 0) {
+      seekTo(initialTime);
+    }
+
+    if (initialPlaying) {
+      play();
+    }
+  }, [isHost, isReady, initialTime, initialPlaying, seekTo, play]);
 
   // Update time display frequently
   useEffect(() => {
@@ -124,34 +149,51 @@ export function VideoPlayer() {
       setHostTime(receivedHostTime);
       setTimeDiff(diff);
 
-      // If difference is too large, just seek
-      if (Math.abs(diff) > SEEK_THRESHOLD) {
+      const largeDriftThreshold = supportsVariableSpeed ? SEEK_THRESHOLD : TWITCH_SEEK_THRESHOLD;
+      const needsHardSeek = supportsSeek && Math.abs(diff) > largeDriftThreshold;
+
+      if (needsHardSeek) {
         setIsSynced(false);
         seekTo(receivedHostTime);
-        setPlaybackRate(1);
-        setPlaybackRateState(1);
+        if (supportsVariableSpeed) {
+          setPlaybackRate(1);
+          setPlaybackRateState(1);
+        } else if (playbackRate !== 1) {
+          setPlaybackRateState(1);
+        }
         setTimeout(() => setIsSynced(true), 500);
         return;
       }
 
-      // If difference is within threshold, adjust playback speed
-      if (Math.abs(diff) > SYNC_THRESHOLD) {
-        setIsSynced(false);
-        // Calculate new speed: faster if behind, slower if ahead
-        // diff > 0 means we're behind (host is ahead), so speed up
-        // diff < 0 means we're ahead (host is behind), so slow down
-        let newSpeed = 1 + (diff * SPEED_FACTOR);
-        newSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, newSpeed));
+      if (supportsVariableSpeed) {
+        if (Math.abs(diff) > SYNC_THRESHOLD) {
+          setIsSynced(false);
+          let newSpeed = 1 + (diff * SPEED_FACTOR);
+          newSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, newSpeed));
 
-        setPlaybackRate(newSpeed);
-        setPlaybackRateState(newSpeed);
-      } else {
-        // We're synced, return to normal speed
-        setIsSynced(true);
-        if (playbackRate !== 1) {
-          setPlaybackRate(1);
-          setPlaybackRateState(1);
+          setPlaybackRate(newSpeed);
+          setPlaybackRateState(newSpeed);
+        } else {
+          setIsSynced(true);
+          if (playbackRate !== 1) {
+            setPlaybackRate(1);
+            setPlaybackRateState(1);
+          }
         }
+      } else if (supportsSeek) {
+        if (Math.abs(diff) > SYNC_THRESHOLD) {
+          setIsSynced(false);
+          seekTo(receivedHostTime);
+          setTimeout(() => setIsSynced(true), 500);
+        } else {
+          setIsSynced(true);
+        }
+      } else {
+        setIsSynced(Math.abs(diff) <= TWITCH_SEEK_THRESHOLD);
+      }
+
+      if (!supportsVariableSpeed && playbackRate !== 1) {
+        setPlaybackRateState(1);
       }
     });
 
@@ -163,14 +205,33 @@ export function VideoPlayer() {
       unsubPlay();
       unsubPause();
     };
-  }, [isHost, isReady, onSyncUpdate, onPlayVideo, onPauseVideo, getCurrentTime, seekTo, play, pause, setPlaybackRate, playbackRate]);
+  }, [
+    isHost,
+    isReady,
+    supportsVariableSpeed,
+    onSyncUpdate,
+    onPlayVideo,
+    onPauseVideo,
+    getCurrentTime,
+    seekTo,
+    play,
+    pause,
+    setPlaybackRate,
+    playbackRate
+  ]);
 
   const copyRoomCode = () => {
     if (roomCode) {
       navigator.clipboard.writeText(roomCode);
+      posthog.capture('room_code_copied', { room_code: roomCode });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleLeaveRoom = () => {
+    posthog.capture('room_left', { room_code: roomCode, is_host: isHost, platform });
+    leaveRoom();
   };
 
   return (
@@ -189,13 +250,21 @@ export function VideoPlayer() {
                   {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
               </Badge>
+              {platform && (
+                <Badge variant="secondary" className="gap-2 px-3 py-1.5">
+                  Plataforma:
+                  <span className="font-semibold">
+                    {platform === 'twitch' ? 'Twitch' : 'YouTube'}
+                  </span>
+                </Badge>
+              )}
               <SyncStatus isSynced={isSynced} />
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <Button
-              onClick={leaveRoom}
+              onClick={handleLeaveRoom}
               variant="destructive"
               size="sm"
             >
@@ -256,18 +325,28 @@ export function VideoPlayer() {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Velocidad:</span>
-                        <span className={`font-mono text-lg font-bold px-3 py-1 rounded ${
-                          playbackRate > 1
-                            ? 'text-blue-400 bg-blue-500/20'
-                            : playbackRate < 1
-                              ? 'text-orange-400 bg-orange-500/20'
-                              : 'text-green-400 bg-green-500/20'
-                        }`}>
-                          {playbackRate.toFixed(2)}x
-                        </span>
-                      </div>
+                      {supportsVariableSpeed ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Velocidad:</span>
+                          <span className={`font-mono text-lg font-bold px-3 py-1 rounded ${
+                            playbackRate > 1
+                              ? 'text-blue-400 bg-blue-500/20'
+                              : playbackRate < 1
+                                ? 'text-orange-400 bg-orange-500/20'
+                                : 'text-green-400 bg-green-500/20'
+                          }`}>
+                            {playbackRate.toFixed(2)}x
+                          </span>
+                        </div>
+                      ) : supportsSeek ? (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          Twitch sincroniza con pequeños saltos (sin cambiar velocidad)
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          Twitch Live no permite ajustar ni saltar; la diferencia es solo orientativa
+                        </Badge>
+                      )}
                     </>
                   )}
 
@@ -277,13 +356,30 @@ export function VideoPlayer() {
                     </Badge>
                   )}
                 </div>
+                {usesManualClock && (
+                  <p className="text-center text-xs text-muted-foreground mt-3">
+                    Twitch Live no expone el tiempo real del video; usamos un cronometro interno para mantener la referencia del host.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
             {!isHost && (
-              <p className="text-muted-foreground text-sm text-center">
-                Solo el host puede controlar la reproduccion. Tu video se sincroniza automaticamente.
-              </p>
+              <div className="text-muted-foreground text-sm text-center space-y-1">
+                <p>
+                  Solo el host puede controlar la reproduccion. Tu video se sincroniza automaticamente.
+                </p>
+                {platform === 'twitch' && supportsSeek && (
+                  <p className="text-xs text-muted-foreground">
+                    En Twitch no es posible modificar la velocidad, asi que realizamos pequeños saltos cuando hace falta.
+                  </p>
+                )}
+                {isTwitchLive && (
+                  <p className="text-xs text-muted-foreground">
+                    Twitch no expone controles para adelantar un directo, asi que solo mostramos la diferencia con el host como referencia.
+                  </p>
+                )}
+              </div>
             )}
           </div>
 

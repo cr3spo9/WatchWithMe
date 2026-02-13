@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
+import { usePostHog } from '@posthog/react';
 import { useRoom } from '../context/RoomContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { ArrowLeft, Plus, Users } from 'lucide-react';
 
 export function RoomControls() {
   const { user } = useUser();
+  const posthog = usePostHog();
   const { createRoom, joinRoom, error, clearError } = useRoom();
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
   const [videoUrl, setVideoUrl] = useState('');
@@ -18,6 +20,7 @@ export function RoomControls() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (videoUrl) {
+      posthog.capture('room_create_submitted', { video_url: videoUrl });
       createRoom(videoUrl, username);
     }
   };
@@ -25,6 +28,7 @@ export function RoomControls() {
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCode) {
+      posthog.capture('room_join_submitted', { room_code: roomCode });
       joinRoom(roomCode, username);
     }
   };
@@ -43,7 +47,10 @@ export function RoomControls() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
-              onClick={() => setMode('create')}
+              onClick={() => {
+                posthog.capture('room_create_clicked');
+                setMode('create');
+              }}
               className="w-full h-14 text-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
               size="lg"
             >
@@ -52,7 +59,10 @@ export function RoomControls() {
             </Button>
 
             <Button
-              onClick={() => setMode('join')}
+              onClick={() => {
+                posthog.capture('room_join_clicked');
+                setMode('join');
+              }}
               variant="secondary"
               className="w-full h-14 text-lg"
               size="lg"
@@ -91,13 +101,13 @@ export function RoomControls() {
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm text-muted-foreground">
-                  URL del directo de YouTube
+                  URL del directo (YouTube o Twitch)
                 </label>
                 <Input
                   type="text"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="https://youtube.com/watch?v=..."
+                  placeholder="https://youtube.com/watch?v=... o https://twitch.tv/tu_canal"
                   required
                 />
               </div>
