@@ -21,7 +21,11 @@ createRoot(document.getElementById('root')!).render(
 
         {/* Main app */}
         <Route path="/app/*" element={
-          <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+          <ClerkProvider
+            publishableKey={PUBLISHABLE_KEY}
+            signInForceRedirectUrl="/app"
+            signUpForceRedirectUrl="/app"
+          >
             <App />
           </ClerkProvider>
         } />
