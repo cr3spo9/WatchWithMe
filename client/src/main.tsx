@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ClerkProvider } from '@clerk/clerk-react'
+import { PostHogProvider } from '@posthog/react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App'
 import { Landing } from './landings/Landing'
@@ -12,24 +13,33 @@ if (!PUBLISHABLE_KEY) {
   throw new Error('Missing Clerk Publishable Key')
 }
 
+const posthogOptions = {
+  api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        {/* Landing page */}
-        <Route path="/" element={<Landing />} />
+    <PostHogProvider
+      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
+      options={posthogOptions}
+    >
+      <BrowserRouter>
+        <Routes>
+          {/* Landing page */}
+          <Route path="/" element={<Landing />} />
 
-        {/* Main app */}
-        <Route path="/app/*" element={
-          <ClerkProvider
-            publishableKey={PUBLISHABLE_KEY}
-            signInForceRedirectUrl="/app"
-            signUpForceRedirectUrl="/app"
-          >
-            <App />
-          </ClerkProvider>
-        } />
-      </Routes>
-    </BrowserRouter>
+          {/* Main app */}
+          <Route path="/app/*" element={
+            <ClerkProvider
+              publishableKey={PUBLISHABLE_KEY}
+              signInForceRedirectUrl="/app"
+              signUpForceRedirectUrl="/app"
+            >
+              <App />
+            </ClerkProvider>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </PostHogProvider>
   </StrictMode>,
 )
