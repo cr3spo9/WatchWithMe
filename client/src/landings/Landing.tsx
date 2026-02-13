@@ -104,7 +104,7 @@ export function Landing() {
           </h1>
 
           <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-10 font-mono">
-            &gt; Crea sala. Compártela. Ve directos sincronizados._
+            &gt; Crea sala. Compártela. Ve directos de YouTube sincronizados._
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -140,7 +140,7 @@ export function Landing() {
               <div className="flex items-center gap-2 mb-3 font-mono text-sm">
                 <UserCheck className="w-4 h-4 text-cyan-400" />
                 <span className="text-cyan-400">HOST_VIEW</span>
-                <span className="ml-auto text-gray-500">// controla el video</span>
+                <span className="ml-auto text-gray-500">// controla el directo</span>
               </div>
               <div
                 className="relative cursor-zoom-in"
